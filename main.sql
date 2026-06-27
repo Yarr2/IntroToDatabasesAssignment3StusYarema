@@ -66,6 +66,56 @@ begin
 end;
 $$;
 
+create or replace procedure
+create_order(p_customer_id int)
+language plpgsql
+as $$
+begin
+	if p_customer_id in (select c.customer_id from customers c) then 
+		insert into orders (customer_id) values (p_customer_id);
+	else raise exception 'There is no customer with id %', p_customer_id;
+	end if;
+	commit;
+end;
+$$;
+
+create or replace procedure
+add_product_to_order(
+    p_order_id int,
+    p_product_id int,
+    p_quantity int
+)
+language plpgsql
+as $$
+declare
+	price numeric(10,2);
+begin
+	if p_order_id not in (select o.order_id from orders o) then
+		raise exception 'There is no order with id %', p_order_id;
+	end if;
+	
+	if p_quantity <= 0 then 
+		raise exception 'Quantity should be positive, not %', p_quantity;
+	end if;
+
+	if p_quantity > (
+		select coalesce(p.stock_quantity, 0) 
+		from products p 
+		where p.product_id == p_product_id) then
+		raise exception 'Cannot give more product than are in stock';
+	end if;
+
+	select p.price
+	into price
+	from products p
+	where p.product_id = p_product_id;
+	
+	insert into order_items (order_id, product_id, quantity, price)
+	values (p_order_id, p_product_id, p_quantity, price);
+end;
+$$;
+
+
 
 
 
