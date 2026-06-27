@@ -109,12 +109,56 @@ begin
 	into price
 	from products p
 	where p.product_id = p_product_id;
+
+	update products p
+	set p.stock_quantity = p.stock_quantity - p_quantity
+	where p.product_id = p_product_id;
 	
 	insert into order_items (order_id, product_id, quantity, price)
 	values (p_order_id, p_product_id, p_quantity, price);
 end;
 $$;
 
+/* triggers */ 
+create or replace function update_order_total()
+returns trigger as $$
+begin
+    if (tg_op = 'DELETE') then
+        update orders 
+        set total_amount = calculate_order_total(old.order_id)
+        where order_id = old.order_id;
+        return old;
+    else
+        update orders 
+        set total_amount = calculate_order_total(new.order_id)
+        where order_id = new.order_id;
+       	return new;
+    end if;
+end;
+$$ language plpgsql;
+
+
+create trigger trg_update_order_total
+after insert or update or delete on order_items
+for each row
+execute function update_order_total();
+
+
+
+create or replace function log_new_order()
+returns trigger as $$
+begin
+    insert into order_log (order_id, customer_id, action) /* log_date is set automatically to current time*/
+    values (new.order_id, new.customer_id, 'ORDER_CREATED');
+    
+    return new;
+end;
+$$ language plpgsql;
+
+create trigger trg_log_new_order
+after insert on orders
+for each row
+execute function log_new_order();
 
 
 
