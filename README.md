@@ -10,3 +10,4 @@
 Спочатку Postgre виконує Join, для цього вона за допомогою Sequence scan перевіряє умову join.
 далі воно з'єднує самі таблички, після чого знову робить Sequence scan для того щоб відфільтрувати замовлення з id = 1. Postgre використав Hash Join i Sequence scan, як видно з рядків 3, 6, 11.
 # 3.Git screenshoot
+<img width="1170" height="1160" alt="image" src="https://github.com/user-attachments/assets/faaf919d-219b-4c7e-8666-8e9bf9e8c9c9" />
