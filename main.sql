@@ -66,6 +66,7 @@ begin
 end;
 $$;
 
+
 create or replace procedure
 create_order(p_customer_id int)
 language plpgsql
@@ -75,7 +76,6 @@ begin
 		insert into orders (customer_id) values (p_customer_id);
 	else raise exception 'There is no customer with id %', p_customer_id;
 	end if;
-	commit;
 end;
 $$;
 
@@ -101,7 +101,7 @@ begin
 	if p_quantity > (
 		select coalesce(p.stock_quantity, 0) 
 		from products p 
-		where p.product_id == p_product_id) then
+		where p.product_id = p_product_id) then
 		raise exception 'Cannot give more product than are in stock';
 	end if;
 
@@ -109,15 +109,17 @@ begin
 	into price
 	from products p
 	where p.product_id = p_product_id;
-
-	update products p
-	set p.stock_quantity = p.stock_quantity - p_quantity
-	where p.product_id = p_product_id;
 	
+	update products p
+	set stock_quantity = stock_quantity - p_quantity
+	where p.product_id = p_product_id;
+
 	insert into order_items (order_id, product_id, quantity, price)
 	values (p_order_id, p_product_id, p_quantity, price);
 end;
 $$;
+
+
 
 /* triggers */ 
 create or replace function update_order_total()
@@ -127,12 +129,12 @@ begin
         update orders 
         set total_amount = calculate_order_total(old.order_id)
         where order_id = old.order_id;
-        return old;
+        return null;
     else
         update orders 
         set total_amount = calculate_order_total(new.order_id)
         where order_id = new.order_id;
-       	return new;
+       	return null;
     end if;
 end;
 $$ language plpgsql;
@@ -161,5 +163,58 @@ for each row
 execute function log_new_order();
 
 
+/* testing, firstly create tables and run python script fill_tables.py( given in assignment) to get correct data 
+ * 
+ * select statements are for showing that procedure/function/trigger works correctly
+ * 
+ * */
+
+insert into customers (full_name, email, balance) values 
+('Alice Smith', 'alice@example.com', 500.00),
+('Bob Jones', 'bob@example.com', 100.00);
+
+insert into products (product_name, price, stock_quantity) values 
+('Camera', 25.00, 50),
+('Keyboard', 75.00, 20);
+
+select * from customers;
+select * from products;
+
+call create_order(3);
+call create_order(44); /* should be an error as no customer with id 44*/
 
 
+select * from orders;
+select * from order_log;
+
+call add_product_to_order(1, 2, 2);
+
+call add_product_to_order(1, 3, 1);
+
+call add_product_to_order(1, 2, -5); /* showcase of quantity check */
+call add_product_to_order(167, 3, 4); /* showcase of non existing order check */
+call add_product_to_order(1, 7, 25); /* showcase of overflown quantity check */
+
+
+select * from order_items;
+
+select order_id, customer_id, total_amount from orders where order_id = 1;
+
+select product_id, product_name, stock_quantity from products where product_id in (2, 3);
+
+select * from order_log ol ;
+
+
+
+/* example query */
+
+explain analyze
+select
+    oi.order_id,
+    p.product_name,
+    oi.quantity,
+    oi.price,
+    oi.quantity * oi.price as item_total
+from order_items oi
+join products p on oi.product_id = p.product_id
+where oi.order_id = 1;
